@@ -1,4 +1,4 @@
-package net.exent.goflyautologger;
+package net.exent.goflyautologger.fragment;
 
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
@@ -21,15 +21,16 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
-import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.ListView;
+
+import net.exent.goflyautologger.GoFlyAutoLogger;
+import net.exent.goflyautologger.R;
 
 import java.util.Iterator;
 import java.util.List;
 
 public class BluetoothLeScan extends Fragment {
-    private static final String SHARED_PREFERENCES_BLUETOOTH_DEVICES = "bluetooth_devices";
     private DeviceListArrayAdapter deviceListArrayAdapter;
     private BluetoothLeScanner bluetoothLeScanner;
 
@@ -45,43 +46,34 @@ public class BluetoothLeScan extends Fragment {
             public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
                 CheckBox checkBox = (CheckBox) view.findViewById(R.id.bluetoothLeScan_checkBox);
                 checkBox.setChecked(!checkBox.isChecked());
-                SharedPreferences sharedPreferences = getActivity().getSharedPreferences(SHARED_PREFERENCES_BLUETOOTH_DEVICES, Context.MODE_PRIVATE);
-                sharedPreferences.edit().putBoolean(checkBox.getText().toString(), checkBox.isChecked()).commit();
+                SharedPreferences sharedPreferences = getActivity().getSharedPreferences(GoFlyAutoLogger.SHARED_PREFERENCES_BLUETOOTH_DEVICES, Context.MODE_PRIVATE);
+                sharedPreferences.edit().putBoolean(checkBox.getText().toString(), checkBox.isChecked()).apply();
             }
         });
-        view.findViewById(R.id.bluetoothLeScan_scanButton).setOnClickListener(new View.OnClickListener() {
+        listView.setOnItemLongClickListener(new AdapterView.OnItemLongClickListener() {
             @Override
-            public void onClick(View view) {
-                Button button = (Button) view;
-                String stopScanning = getActivity().getString(R.string.stop_scanning);
-                if (stopScanning.equals(button.getText())) {
-                    stopScan();
-                    button.setText(getActivity().getString(R.string.scan));
-                } else {
-                    if (startScan())
-                        button.setText(stopScanning);
-                }
+            public boolean onItemLongClick(AdapterView<?> parent, View view, int position, long id) {
+                CheckBox checkBox = (CheckBox) view.findViewById(R.id.bluetoothLeScan_checkBox);
+                SharedPreferences sharedPreferences = getActivity().getSharedPreferences(GoFlyAutoLogger.SHARED_PREFERENCES_BLUETOOTH_DEVICES, Context.MODE_PRIVATE);
+                sharedPreferences.edit().remove(checkBox.getText().toString()).apply();
+                deviceListArrayAdapter.notifyDataSetChanged();
+                return true;
             }
         });
 
         return view;
     }
 
-    private void stopScan() {
-        if (bluetoothLeScanner == null)
-            return;
-        bluetoothLeScanner.stopScan(new ScanCallback() {
-            // TODO: create a proper class and use it in both scan and stopScan methods, perhaps?
-        });
-    }
-
-    private boolean startScan() {
+    @Override
+    public void onResume() {
+        // TODO: not working properly, throwing exceptions in all directions
+        super.onResume();
         Log.d(getClass().getName(), "Started scanning for Bluetooth LE devices");
         BluetoothAdapter bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
         if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled()) {
             Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
             startActivityForResult(enableBtIntent, 1);
-            return false;
+            // TODO: need to enable bluetooth before showing this fragment
         } else {
             bluetoothLeScanner = bluetoothAdapter.getBluetoothLeScanner();
             bluetoothLeScanner.startScan(new ScanCallback() {
@@ -117,6 +109,7 @@ public class BluetoothLeScan extends Fragment {
                                 Log.d(getClass().getName(), "onServicesDiscovered: " + services.toString());
                                 for (BluetoothGattService service : services) {
                                     for (BluetoothGattCharacteristic characteristic : service.getCharacteristics()) {
+                                        Log.d(getClass().getName(), "Characteristics: " + characteristic.getProperties() + " - " + characteristic.getPermissions());
                                         Log.d(getClass().getName(), "setCharacteristicNotification (" + characteristic.getUuid().toString() + "): " + gatt.setCharacteristicNotification(characteristic, true));
                                     }
                                 }
@@ -127,11 +120,11 @@ public class BluetoothLeScan extends Fragment {
                                 String text = characteristic.getStringValue(0);
                                 if (text.contains("$GPGGA,") || text.contains("$GPRMC,") || text.contains("$PTAS1,")) {
                                     Log.d(getClass().getName(), "Discovered valid device: " + device.getName() + " (" + device.getAddress() + "): " + characteristic.getUuid() + " - " + text);
-                                    SharedPreferences sharedPreferences = getActivity().getSharedPreferences(SHARED_PREFERENCES_BLUETOOTH_DEVICES, Context.MODE_PRIVATE);
+                                    SharedPreferences sharedPreferences = getActivity().getSharedPreferences(GoFlyAutoLogger.SHARED_PREFERENCES_BLUETOOTH_DEVICES, Context.MODE_PRIVATE);
                                     String key = device.getName() + ";" + device.getAddress() + ";" + characteristic.getUuid();
                                     if (!sharedPreferences.contains(key)) {
-                                        sharedPreferences.edit().putBoolean(key, false).commit();
-                                        deviceListArrayAdapter.notifyDataSetChanged();
+                                        sharedPreferences.edit().putBoolean(key, false).apply();
+                                        deviceListArrayAdapter.notifyDataSetChanged(); // TODO: not allowed here (Only the original thread that created a view hierarchy can touch its views)
                                     }
                                     gatt.disconnect();
                                     gatt.close();
@@ -141,12 +134,21 @@ public class BluetoothLeScan extends Fragment {
                     }
                 }
             });
-            return true;
         }
     }
 
+    @Override
+    public void onPause() {
+        super.onPause();
+        if (bluetoothLeScanner == null)
+            return;
+        bluetoothLeScanner.stopScan(new ScanCallback() {
+            // TODO: create a proper class and use it in both scan and stopScan methods, perhaps?
+        });
+    }
+
     private class DeviceListArrayAdapter extends ArrayAdapter<BluetoothDevice> {
-        private SharedPreferences sharedPreferences = getActivity().getSharedPreferences(SHARED_PREFERENCES_BLUETOOTH_DEVICES, Context.MODE_PRIVATE);
+        private SharedPreferences sharedPreferences = getActivity().getSharedPreferences(GoFlyAutoLogger.SHARED_PREFERENCES_BLUETOOTH_DEVICES, Context.MODE_PRIVATE);
 
         public DeviceListArrayAdapter(Context context) {
             super(context, R.layout.list_entry_bluetooth_le_scan);

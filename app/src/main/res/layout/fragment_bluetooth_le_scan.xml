@@ -2,21 +2,12 @@
              xmlns:tools="http://schemas.android.com/tools"
              android:layout_width="match_parent"
              android:layout_height="match_parent"
-             tools:context="net.exent.goflyautologger.BluetoothLeScan">
-
-    <Button
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="@string/scan"
-        android:id="@+id/bluetoothLeScan_scanButton"
-        android:layout_gravity="left|top"
-        android:layout_alignParentTop="true"
-        android:layout_alignParentStart="true"/>
+             tools:context="net.exent.goflyautologger.fragment.BluetoothLeScan">
 
     <ListView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:id="@+id/bluetoothLeScan_deviceList"
-        android:layout_below="@+id/bluetoothLeScan_scanButton"
-        android:layout_alignParentStart="true"/>
+        android:layout_alignParentStart="true"
+        android:longClickable="true"/>
 </RelativeLayout>
